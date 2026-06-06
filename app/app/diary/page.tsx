@@ -52,41 +52,41 @@ export default function DiaryPage() {
     setUser(userData)
 
     const tz = userData.timezone || 'America/Bogota'
-    const todayStr = getTodayInUserTimezone(tz)
     const beforeDeadline = isBeforeDeadline(tz)
     setDayOpen(beforeDeadline)
 
-    const { data: allEntries } = await supabase
+    // Get the highest day_number with valid_day = true
+    const { data: completedEntries } = await supabase
       .from('daily_entries')
-      .select('day_number, valid_day, entry_date, main_text')
+      .select('day_number')
       .eq('user_id', session.user.id)
-      .order('day_number', { ascending: true })
+      .eq('valid_day', true)
+      .order('day_number', { ascending: false })
+      .limit(1)
 
-    const hasAnyEntries = (allEntries || []).length > 0
-    const hasDay0WithContent = (allEntries || []).some(
-      (e) => e.day_number === 0 && e.main_text && e.main_text.trim().length > 0
-    )
+    const maxCompletedDay = completedEntries?.[0]?.day_number || 0
 
-    const completedDayNumbers = new Set(
-      (allEntries || [])
-        .filter((e) => {
-          if (e.day_number <= 0) return false
-          if (!e.main_text || e.main_text.trim().length === 0) return false
-          const entryDateInTz = new Date(e.entry_date + 'T00:00:00').toLocaleDateString('en-CA', { timeZone: tz })
-          return entryDateInTz < todayStr || (entryDateInTz === todayStr && beforeDeadline)
-        })
-        .map((e) => e.day_number)
-    )
-
-    // New user with no entries → day 0
-    // User who saved day 0 but no day 1+ → day 1
-    // Otherwise → next uncompleted day
+    // The "next day to work on" is maxCompletedDay + 1
+    // But we only allow advancing past that if:
+    //   - Midnight has passed (beforeDeadline === false means past deadline)
+    //   - AND the current day (maxCompletedDay) is valid
+    // If before deadline, user stays on their current day (can keep writing)
+    // If past deadline and current day is valid, advance to next day
+    // If past deadline but current day is NOT valid, stay on same day (incomplete)
     let day: number
-    if (!hasAnyEntries || (!hasDay0WithContent && completedDayNumbers.size === 0)) {
-      day = 0
+    if (maxCompletedDay === 0) {
+      // Never completed a day → always start at day 1
+      day = 1
+    } else if (beforeDeadline) {
+      // Day still open → stay on the day after the last completed one
+      // (user can keep writing today)
+      day = Math.min(maxCompletedDay + 1, 21)
     } else {
-      day = Math.min(completedDayNumbers.size + 1, 21)
+      // Past deadline → advance is allowed since last completed day is valid
+      // Move to the next day
+      day = Math.min(maxCompletedDay + 1, 21)
     }
+
     setDayNumber(day)
 
     const { data: contentData } = await supabase
@@ -306,7 +306,7 @@ export default function DiaryPage() {
         <div className="flex items-center justify-center gap-3 mt-2">
           <div className="h-px flex-1 bg-stone-200" />
           <span className="font-serif text-4xl text-stone-700">
-            {dayNumber === 0 ? 'Bienvenida' : `Día ${dayNumber}`}
+            Día {dayNumber}
           </span>
           <div className="h-px flex-1 bg-stone-200" />
         </div>
@@ -317,18 +317,28 @@ export default function DiaryPage() {
       <div className="w-full bg-stone-100 rounded-full h-1">
         <div
           className="bg-stone-600 h-1 rounded-full transition-all duration-500"
-          style={{ width: dayNumber === 0 ? '2%' : `${(dayNumber / 21) * 100}%` }}
+          style={{ width: `${(dayNumber / 21) * 100}%` }}
         />
       </div>
 
       {/* Deadline notice */}
-      {!beforeDeadline && (
+      {!beforeDeadline && entry?.valid_day && (
         <div className="bg-stone-100 rounded-xl p-4 text-center">
           <p className="font-sans text-sm text-stone-500">
             El día de hoy ya ha finalizado en tu zona horaria ({tz.replace('_', ' ')}).
           </p>
           <p className="font-sans text-xs text-stone-400 mt-1">
-            Tus escrituras se guardarán para el día actual.
+            Tu día fue completado. Mañana continuarás con el siguiente.
+          </p>
+        </div>
+      )}
+      {!beforeDeadline && !entry?.valid_day && (
+        <div className="bg-amber-50 rounded-xl p-4 text-center border border-amber-100">
+          <p className="font-sans text-sm text-amber-700">
+            El día ya finalizó en tu zona horaria ({tz.replace('_', ' ')}) pero aún no completaste este día.
+          </p>
+          <p className="font-sans text-xs text-amber-600 mt-1">
+            Escribe al menos 5 caracteres para que el día cuente en tu racha.
           </p>
         </div>
       )}
@@ -492,9 +502,9 @@ export default function DiaryPage() {
             Guardando...
           </span>
         ) : saved ? (
-          dayNumber === 0 ? 'Guardado — mañana comienza el Día 1' : 'Guardado'
+          'Guardado'
         ) : (
-          dayNumber === 0 ? 'Guardar y comenzar el Día 1' : 'Guardar entrada'
+          'Guardar entrada'
         )}
       </button>
       <p className="text-center font-sans text-xs text-stone-300">
