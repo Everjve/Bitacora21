@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [acceptedLegal, setAcceptedLegal] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -57,10 +58,12 @@ export default function RegisterPage() {
       .maybeSingle()
 
     if (!profile) {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
       await supabase.from('users').insert({
         id: authData.user.id,
         email,
         name,
+        timezone,
         created_at: new Date().toISOString(),
       })
     }
@@ -74,7 +77,7 @@ export default function RegisterPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <Link href="/" className="inline-block">
-            <h1 className="font-serif text-3xl text-stone-800">Bitácora 21</h1>
+            <img src="/logo-negro.png" alt="Bitácora 21" className="h-8 w-auto mx-auto" />
           </Link>
           <div className="w-8 h-px bg-stone-300 mx-auto mt-4 mb-4" />
           <p className="font-sans text-sm text-stone-400">Comienza tu transformación</p>
@@ -124,13 +127,42 @@ export default function RegisterPage() {
             />
           </div>
 
+          <div className="flex items-start gap-3 pt-2">
+            <input
+              type="checkbox"
+              id="legal-accept"
+              checked={acceptedLegal}
+              onChange={(e) => setAcceptedLegal(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-stone-300 text-stone-800 focus:ring-stone-400 cursor-pointer accent-stone-800"
+            />
+            <label htmlFor="legal-accept" className="font-sans text-xs text-stone-500 leading-relaxed cursor-pointer">
+              Acepto el{' '}
+              <Link
+                href="/privacy"
+                target="_blank"
+                className="text-stone-600 underline decoration-stone-300 underline-offset-2 hover:decoration-stone-500 transition-colors"
+              >
+                Aviso de Privacidad
+              </Link>{' '}
+              y los{' '}
+              <Link
+                href="/terms"
+                target="_blank"
+                className="text-stone-600 underline decoration-stone-300 underline-offset-2 hover:decoration-stone-500 transition-colors"
+              >
+                Términos y Condiciones
+              </Link>{' '}
+              del prototipo.
+            </label>
+          </div>
+
           {error && (
             <p className="font-sans text-sm text-red-500 text-center py-2">{error}</p>
           )}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !acceptedLegal}
             className="w-full py-3.5 bg-stone-800 text-white text-sm font-sans font-medium tracking-wide rounded-lg hover:bg-stone-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 mt-2"
           >
             {loading ? (

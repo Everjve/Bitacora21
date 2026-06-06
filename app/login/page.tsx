@@ -35,8 +35,8 @@ export default function LoginPage() {
     <main className="min-h-screen bg-[#FAFAFA] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
-          <Link href="/">
-            <h1 className="font-serif text-3xl text-stone-800">Bitácora 21</h1>
+          <Link href="/" className="inline-block">
+            <img src="/logo-negro.png" alt="Bitácora 21" className="h-8 w-auto mx-auto" />
           </Link>
           <div className="w-8 h-px bg-stone-300 mx-auto mt-4 mb-4" />
           <p className="font-sans text-sm text-stone-400">Continúa tu viaje</p>
@@ -97,6 +97,12 @@ export default function LoginPage() {
             Regístrate
           </Link>
         </p>
+
+        <div className="text-center mt-6 flex items-center justify-center gap-3 font-sans text-xs text-stone-400">
+          <Link href="/privacy" className="hover:text-stone-600 transition-colors">Privacidad</Link>
+          <span className="text-stone-300">&middot;</span>
+          <Link href="/terms" className="hover:text-stone-600 transition-colors">Términos</Link>
+        </div>
       </div>
     </main>
   )

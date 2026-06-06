@@ -36,9 +36,8 @@ export default function Home() {
           </span>
         </div>
 
-        <h1 className="font-serif text-5xl text-stone-800 leading-tight mb-4">
-          Bitácora<br />
-          <span className="italic text-stone-500">21</span>
+        <h1 className="mb-4">
+          <img src="/logo-negro.png" alt="Bitácora 21" className="h-12 w-auto mx-auto" />
         </h1>
 
         <div className="w-8 h-px bg-stone-300 mx-auto my-6" />

@@ -10,6 +10,17 @@ function extractYouTubeId(embedHtml: string): string | null {
   return match ? match[1] : null
 }
 
+function getTodayInUserTimezone(timezone: string): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: timezone })
+}
+
+function isBeforeDeadline(timezone: string): boolean {
+  const now = new Date()
+  const todayEnd = new Date(now.toLocaleString('en-US', { timeZone: timezone }))
+  todayEnd.setHours(23, 59, 59, 999)
+  return now <= todayEnd
+}
+
 export default function DiaryPage() {
   const [user, setUser] = useState<User | null>(null)
   const [content, setContent] = useState<DailyContent | null>(null)
@@ -24,6 +35,7 @@ export default function DiaryPage() {
   const [meditated, setMeditated] = useState(false)
   const [savingMeditation, setSavingMeditation] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [dayOpen, setDayOpen] = useState(true)
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -39,13 +51,16 @@ export default function DiaryPage() {
 
     setUser(userData)
 
+    const tz = userData.timezone || 'America/Bogota'
+    const todayStr = getTodayInUserTimezone(tz)
+    const beforeDeadline = isBeforeDeadline(tz)
+    setDayOpen(beforeDeadline)
+
     const { data: allEntries } = await supabase
       .from('daily_entries')
       .select('day_number, valid_day, entry_date, main_text')
       .eq('user_id', session.user.id)
       .order('day_number', { ascending: true })
-
-    const todayStr = new Date().toLocaleDateString('en-CA')
 
     const hasAnyEntries = (allEntries || []).length > 0
     const hasDay0WithContent = (allEntries || []).some(
@@ -54,7 +69,12 @@ export default function DiaryPage() {
 
     const completedDayNumbers = new Set(
       (allEntries || [])
-        .filter((e) => e.day_number > 0 && e.main_text && e.main_text.trim().length > 0 && e.entry_date < todayStr)
+        .filter((e) => {
+          if (e.day_number <= 0) return false
+          if (!e.main_text || e.main_text.trim().length === 0) return false
+          const entryDateInTz = new Date(e.entry_date + 'T00:00:00').toLocaleDateString('en-CA', { timeZone: tz })
+          return entryDateInTz < todayStr || (entryDateInTz === todayStr && beforeDeadline)
+        })
         .map((e) => e.day_number)
     )
 
@@ -110,7 +130,8 @@ export default function DiaryPage() {
     if (!session || !user) return
 
     setSavingMeditation(true)
-    const today = new Date().toISOString().split('T')[0]
+    const tz = user.timezone || 'America/Bogota'
+    const today = getTodayInUserTimezone(tz)
 
     if (entry) {
       await supabase
@@ -168,7 +189,8 @@ export default function DiaryPage() {
     setSaving(true)
 
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const tz = user.timezone || 'America/Bogota'
+      const today = getTodayInUserTimezone(tz)
 
       // Fetch existing entry to append text
       const { data: currentEntry, error: fetchError } = await supabase
@@ -271,6 +293,9 @@ export default function DiaryPage() {
     )
   }
 
+  const tz = user?.timezone || 'America/Bogota'
+  const beforeDeadline = isBeforeDeadline(tz)
+
   return (
     <div className="px-5 py-6 space-y-6">
       {/* Day header */}
@@ -295,6 +320,18 @@ export default function DiaryPage() {
           style={{ width: dayNumber === 0 ? '2%' : `${(dayNumber / 21) * 100}%` }}
         />
       </div>
+
+      {/* Deadline notice */}
+      {!beforeDeadline && (
+        <div className="bg-stone-100 rounded-xl p-4 text-center">
+          <p className="font-sans text-sm text-stone-500">
+            El día de hoy ya ha finalizado en tu zona horaria ({tz.replace('_', ' ')}).
+          </p>
+          <p className="font-sans text-xs text-stone-400 mt-1">
+            Tus escrituras se guardarán para el día actual.
+          </p>
+        </div>
+      )}
 
       {/* Daily quote */}
       {content?.daily_quote && (

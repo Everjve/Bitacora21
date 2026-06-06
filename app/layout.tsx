@@ -22,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <head>
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>

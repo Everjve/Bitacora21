@@ -58,7 +58,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-10 bg-[#FAFAFA]/95 backdrop-blur-sm border-b border-stone-100">
         <div className="app-container mx-auto px-5 py-3 flex items-center justify-between">
           <Link href="/app/diary">
-            <h1 className="font-serif text-xl text-stone-800">Bitácora 21</h1>
+            <img src="/logo-negro.png" alt="Bitácora 21" className="h-8 w-auto" />
           </Link>
           <div className="flex items-center gap-4">
             {userName && (

@@ -3,6 +3,7 @@ export interface User {
   name: string
   email: string
   role: string
+  timezone: string
   start_date: string | null
   current_streak: number
   longest_streak: number
