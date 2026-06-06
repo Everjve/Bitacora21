@@ -57,12 +57,42 @@ export default function DiaryPage() {
     const beforeDeadline = isBeforeDeadline(tz)
     setDayOpen(beforeDeadline)
 
-    // Get the highest day_number with valid_day = true
+    // Check if user has ever written anything (day 0 completed)
+    const { data: anyContent } = await supabase
+      .from('daily_entries')
+      .select('id')
+      .eq('user_id', session.user.id)
+      .not('main_text', 'is', null)
+      .neq('main_text', '')
+      .limit(1)
+
+    const hasAnyContent = (anyContent || []).length > 0
+
+    if (!hasAnyContent) {
+      // New user: show Day 0 (welcome/intro)
+      setDayNumber(0)
+      const { data: contentData } = await supabase
+        .from('daily_content')
+        .select('*')
+        .eq('day_number', 0)
+        .maybeSingle()
+      setContent(contentData)
+      setEntry(null)
+      setMainText('')
+      setInsightText('')
+      setSelectedEmotions([])
+      setMeditated(false)
+      setLoading(false)
+      return
+    }
+
+    // Get the highest day_number with valid_day = true (day 0 never counts)
     const { data: completedEntries } = await supabase
       .from('daily_entries')
       .select('day_number, entry_date')
       .eq('user_id', session.user.id)
       .eq('valid_day', true)
+      .gt('day_number', 0)
       .order('day_number', { ascending: false })
       .limit(1)
 
@@ -72,20 +102,16 @@ export default function DiaryPage() {
     setCompletedToday(isCompletedToday)
 
     // Day calculation rules:
-    // 1. No completed days → Day 1
+    // 1. No completed days (but has written day 0) → Day 1
     // 2. Completed a day today AND before midnight → stay on that day (can keep writing)
     // 3. Completed a day today AND past midnight → advance to next day
     // 4. Completed a day on a PREVIOUS date → advance to next day regardless
-    // 5. Past midnight but current day NOT completed → stay on next uncompleted day
     let day: number
     if (maxCompletedDay === 0) {
       day = 1
     } else if (isCompletedToday && beforeDeadline) {
-      // Completed today, day still open → stay on this day to keep writing
       day = Math.min(maxCompletedDay, 21)
     } else {
-      // Either completed on a previous day, or completed today but past midnight
-      // → advance to next day
       day = Math.min(maxCompletedDay + 1, 21)
     }
 
@@ -212,7 +238,7 @@ export default function DiaryPage() {
         ? (insightText.trim() ? currentEntry.insight_text + separator + insightText.trim() : currentEntry.insight_text)
         : insightText.trim()
 
-      const isValid = (newMain + newInsight).length >= 5
+      const isValid = dayNumber > 0 && (newMain + newInsight).length >= 5
       console.log('[diary] newMain.length:', newMain.length, '| isValid:', isValid)
 
       const { data: upsertData, error: upsertError } = await supabase
@@ -308,18 +334,20 @@ export default function DiaryPage() {
         <div className="flex items-center justify-center gap-3 mt-2">
           <div className="h-px flex-1 bg-stone-200" />
           <span className="font-serif text-4xl text-stone-700">
-            Día {dayNumber}
+            {dayNumber === 0 ? 'Bienvenida' : `Día ${dayNumber}`}
           </span>
           <div className="h-px flex-1 bg-stone-200" />
         </div>
-        <p className="font-sans text-xs text-stone-400 mt-1">de 21</p>
+        <p className="font-sans text-xs text-stone-400 mt-1">
+          {dayNumber === 0 ? 'Introducción al viaje' : 'de 21'}
+        </p>
       </div>
 
       {/* Progress bar */}
       <div className="w-full bg-stone-100 rounded-full h-1">
         <div
           className="bg-stone-600 h-1 rounded-full transition-all duration-500"
-          style={{ width: `${(dayNumber / 21) * 100}%` }}
+          style={{ width: dayNumber === 0 ? '2%' : `${(dayNumber / 21) * 100}%` }}
         />
       </div>
 
@@ -504,13 +532,15 @@ export default function DiaryPage() {
             Guardando...
           </span>
         ) : saved ? (
-          'Guardado'
+          dayNumber === 0 ? 'Guardado — mañana comienza el Día 1' : 'Guardado'
         ) : (
-          'Guardar entrada'
+          dayNumber === 0 ? 'Guardar y comenzar el Día 1' : 'Guardar entrada'
         )}
       </button>
       <p className="text-center font-sans text-xs text-stone-300">
-        Escribe al menos 5 caracteres para que el día cuente en tu racha
+        {dayNumber === 0
+          ? 'Escribe algo para comenzar tu viaje'
+          : 'Escribe al menos 5 caracteres para que el día cuente en tu racha'}
       </p>
     </div>
   )
