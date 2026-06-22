@@ -39,45 +39,26 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 function MetricsTab() {
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const today = new Date().toISOString().split('T')[0]
-      const last7 = new Date()
-      last7.setDate(last7.getDate() - 7)
-      const last7Str = last7.toISOString().split('T')[0]
+      const { data, error: rpcError } = await supabase.rpc('get_admin_metrics')
+      if (rpcError || !data) {
+        setError(rpcError?.message ?? 'Error al cargar métricas')
+        setLoading(false)
+        return
+      }
 
-      const [
-        { count: totalUsers },
-        { count: activeToday },
-        { count: activeWeek },
-        { data: day1Users },
-        { data: day7Users },
-        { data: day21Users },
-        { data: streaks },
-      ] = await Promise.all([
-        supabase.from('users').select('*', { count: 'exact', head: true }),
-        supabase.from('daily_entries').select('user_id', { count: 'exact', head: true }).eq('entry_date', today).eq('valid_day', true),
-        supabase.from('daily_entries').select('user_id', { count: 'exact', head: true }).gte('entry_date', last7Str).eq('valid_day', true),
-        supabase.from('daily_entries').select('user_id').eq('day_number', 1).eq('valid_day', true),
-        supabase.from('daily_entries').select('user_id').eq('day_number', 7).eq('valid_day', true),
-        supabase.from('daily_entries').select('user_id').eq('day_number', 21).eq('valid_day', true),
-        supabase.from('users').select('current_streak'),
-      ])
-
-      const total = totalUsers || 0
-      const avgStreak = streaks?.length
-        ? streaks.reduce((a, b) => a + (b.current_streak || 0), 0) / streaks.length
-        : 0
-
+      const total = Number(data.total_users) || 0
       setMetrics({
         totalUsers: total,
-        activeToday: activeToday || 0,
-        activeWeek: activeWeek || 0,
-        pctDay1: total ? ((day1Users?.length || 0) / total) * 100 : 0,
-        pctDay7: total ? ((day7Users?.length || 0) / total) * 100 : 0,
-        pctDay21: total ? ((day21Users?.length || 0) / total) * 100 : 0,
-        avgStreak,
+        activeToday: Number(data.active_today) || 0,
+        activeWeek: Number(data.active_week) || 0,
+        pctDay1:  total ? (Number(data.users_day1)  / total) * 100 : 0,
+        pctDay7:  total ? (Number(data.users_day7)  / total) * 100 : 0,
+        pctDay21: total ? (Number(data.users_day21) / total) * 100 : 0,
+        avgStreak: Number(data.avg_streak) || 0,
       })
       setLoading(false)
     }
@@ -85,7 +66,7 @@ function MetricsTab() {
   }, [])
 
   if (loading) return <LoadingSpinner />
-
+  if (error) return <p className="font-sans text-sm text-red-500 py-8 text-center">{error}</p>
   if (!metrics) return null
 
   return (
@@ -123,40 +104,34 @@ function MetricsTab() {
 function AbandonmentTab() {
   const [rows, setRows] = useState<AbandonRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const days = [1, 3, 4, 7, 8, 14, 15, 21]
-      const results = await Promise.all(
-        days.map((d) =>
-          supabase
-            .from('daily_entries')
-            .select('user_id')
-            .eq('day_number', d)
-            .eq('valid_day', true)
-        )
-      )
+      const { data, error: rpcError } = await supabase.rpc('get_admin_abandonment')
+      if (rpcError || !data) {
+        setError(rpcError?.message ?? 'Error al cargar datos')
+        setLoading(false)
+        return
+      }
 
-      const [d1, d3, d4, d7, d8, d14, d15, d21] = results.map((r) =>
-        (r.data || []).map((x: { user_id: string }) => x.user_id)
-      )
-
-      function buildRow(label: string, startUsers: string[], endUsers: string[]): AbandonRow {
-        const endSet = new Set(endUsers)
-        const abandoned = startUsers.filter((u) => !endSet.has(u)).length
+      function buildRow(label: string, key: string): AbandonRow {
+        const reached = Number(data[key].reached) || 0
+        const completed = Number(data[key].completed) || 0
+        const abandoned = reached - completed
         return {
           label,
-          reached: startUsers.length,
+          reached,
           abandoned,
-          pct: startUsers.length ? (abandoned / startUsers.length) * 100 : 0,
+          pct: reached ? (abandoned / reached) * 100 : 0,
         }
       }
 
       setRows([
-        buildRow('Días 1–3', d1, d3),
-        buildRow('Días 4–7', d4, d7),
-        buildRow('Días 8–14', d8, d14),
-        buildRow('Días 15–21', d15, d21),
+        buildRow('Días 1–3',   'tramo_1_3'),
+        buildRow('Días 4–7',   'tramo_4_7'),
+        buildRow('Días 8–14',  'tramo_8_14'),
+        buildRow('Días 15–21', 'tramo_15_21'),
       ])
       setLoading(false)
     }
@@ -164,6 +139,7 @@ function AbandonmentTab() {
   }, [])
 
   if (loading) return <LoadingSpinner />
+  if (error) return <p className="font-sans text-sm text-red-500 py-8 text-center">{error}</p>
 
   return (
     <div className="space-y-4">
